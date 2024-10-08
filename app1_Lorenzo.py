@@ -32,6 +32,9 @@ def load_data_from_mysql(query, server, database, username, password):
     else:
         return None
 
+# Debug: Verificar si los secretos están cargados correctamente
+st.write(st.secrets)  # Esto mostrará todos los secretos y ayudará a verificar si se están cargando correctamente
+
 # Cargar la configuración desde secrets de Streamlit o variables de entorno
 server = st.secrets["mysql"]["MYSQL_SERVER"]
 database = st.secrets["mysql"]["MYSQL_DATABASE"]
