@@ -32,26 +32,20 @@ def load_data_from_mysql(query, server, database, username, password):
     else:
         return None
 
-# Configuración del servidor MySQL
-st.sidebar.title("Configuración de Conexión")
-server = st.sidebar.text_input("Servidor MySQL", value="IP_DEL_SERVIDOR")  # Cambiar "localhost" a la IP del servidor MySQL
-database = st.sidebar.text_input("Base de Datos", value="lorenzo_automotores")
-username = st.sidebar.text_input("Usuario MySQL", value="root")
-
-# Simular diferentes contraseñas disponibles para los usuarios
-password_options = {
-    "Usuario1": "password1",
-    "Usuario2": "password2",
-    "Usuario3": "password3",
-}
-password_user = st.sidebar.selectbox("Seleccionar Usuario", list(password_options.keys()))
-password = password_options[password_user]
+# Cargar la configuración desde secrets de Streamlit o variables de entorno
+server = st.secrets["mysql"]["MYSQL_SERVER"]
+database = st.secrets["mysql"]["MYSQL_DATABASE"]
+username = st.secrets["mysql"]["MYSQL_USER"]
+password = st.secrets["mysql"]["MYSQL_PASSWORD"]
 
 # Inicializa el estado para almacenar el DataFrame concatenado
 if 'df_concatenado' not in st.session_state:
     st.session_state['df_concatenado'] = None
 
 # Título en la barra lateral para la navegación
+st.sidebar.title("Configuración de Conexión")
+
+# Selección de la página
 pagina = st.sidebar.selectbox("Seleccione una página", ["Carga de Datos", "Visualización", "Gráfico"])
 
 # Página 1: Carga de datos
@@ -200,4 +194,3 @@ elif pagina == "Gráfico":
 
     else:
         st.warning("No se ha cargado ningún archivo. Ve a la sección 'Carga de Datos' para hacerlo.")
-
