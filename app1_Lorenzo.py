@@ -32,21 +32,18 @@ def load_data_from_mysql(query, server, database, username, password):
     else:
         return None
 
-# Debug: Verificar si los secretos están cargados correctamente
-st.write(st.secrets)  # Esto mostrará todos los secretos y ayudará a verificar si se están cargando correctamente
-
-# Cargar la configuración desde secrets de Streamlit o variables de entorno
-server = st.secrets["mysql"]["MYSQL_SERVER"]
-database = st.secrets["mysql"]["MYSQL_DATABASE"]
-username = st.secrets["mysql"]["MYSQL_USER"]
-password = st.secrets["mysql"]["MYSQL_PASSWORD"]
-
 # Inicializa el estado para almacenar el DataFrame concatenado
 if 'df_concatenado' not in st.session_state:
     st.session_state['df_concatenado'] = None
 
 # Título en la barra lateral para la navegación
 st.sidebar.title("Configuración de Conexión")
+
+# Configuración de conexión
+server = st.sidebar.text_input("Servidor MySQL", "")
+database = st.sidebar.text_input("Base de Datos", "")
+username = st.sidebar.text_input("Usuario", "")
+password = st.sidebar.text_input("Contraseña", "", type="password")
 
 # Selección de la página
 pagina = st.sidebar.selectbox("Seleccione una página", ["Carga de Datos", "Visualización", "Gráfico"])
