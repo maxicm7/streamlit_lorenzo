@@ -4,14 +4,8 @@ import mysql.connector
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 
-# Credenciales de conexión a MySQL
-server = 'localhost'  
-database = 'lorenzo_automotores'  
-username = 'root' 
-password = 'Maxi$$$424' 
-
 # Función para conectar a MySQL
-def connect_to_mysql():
+def connect_to_mysql(server, database, username, password):
     try:
         conn = mysql.connector.connect(
             host=server,
@@ -25,11 +19,12 @@ def connect_to_mysql():
         return None
 
 # Función para cargar datos desde MySQL
-def load_data_from_mysql(query):
-    conn = connect_to_mysql()
+def load_data_from_mysql(query, server, database, username, password):
+    conn = connect_to_mysql(server, database, username, password)
     if conn:
         try:
             df = pd.read_sql(query, conn)
+            conn.close()  # Cerrar la conexión después de la consulta
             return df
         except Exception as e:
             st.error(f"Error al ejecutar la consulta SQL: {e}")
@@ -37,12 +32,26 @@ def load_data_from_mysql(query):
     else:
         return None
 
+# Configuración del servidor MySQL
+st.sidebar.title("Configuración de Conexión")
+server = st.sidebar.text_input("Servidor MySQL", value="IP_DEL_SERVIDOR")  # Cambiar "localhost" a la IP del servidor MySQL
+database = st.sidebar.text_input("Base de Datos", value="lorenzo_automotores")
+username = st.sidebar.text_input("Usuario MySQL", value="root")
+
+# Simular diferentes contraseñas disponibles para los usuarios
+password_options = {
+    "Usuario1": "password1",
+    "Usuario2": "password2",
+    "Usuario3": "password3",
+}
+password_user = st.sidebar.selectbox("Seleccionar Usuario", list(password_options.keys()))
+password = password_options[password_user]
+
 # Inicializa el estado para almacenar el DataFrame concatenado
 if 'df_concatenado' not in st.session_state:
     st.session_state['df_concatenado'] = None
 
 # Título en la barra lateral para la navegación
-st.sidebar.title("Barra de Navegación")
 pagina = st.sidebar.selectbox("Seleccione una página", ["Carga de Datos", "Visualización", "Gráfico"])
 
 # Página 1: Carga de datos
@@ -53,7 +62,7 @@ if pagina == "Carga de Datos":
     query = st.text_area("Ingresa la consulta SQL:", "SELECT `ID publicación`, `Fecha`, `visits`, `health`, `Origen`, `Título` FROM visitas_salud") 
 
     if st.button("Cargar Datos"):
-        df_concatenado = load_data_from_mysql(query)
+        df_concatenado = load_data_from_mysql(query, server, database, username, password)
         if df_concatenado is not None:
             st.session_state['df_concatenado'] = df_concatenado
             st.write("Datos cargados desde MySQL:")
@@ -184,9 +193,11 @@ elif pagina == "Gráfico":
             ax.xaxis.set_major_locator(mdates.DayLocator())
 
             # Ajustar el gráfico para mejor legibilidad
-            fig.autofmt_xdate()  # Rotar etiquetas de fecha para evitar superposición
+            fig.autofmt_xdate()  # Rotar etiquetas de fecha para evitar solapamientos
 
+            # Mostrar gráfico en Streamlit
             st.pyplot(fig)
 
-        else:
-            st.warning("No se ha cargado ningún archivo. Ve a la sección 'Carga de Datos' para hacerlo.")
+    else:
+        st.warning("No se ha cargado ningún archivo. Ve a la sección 'Carga de Datos' para hacerlo.")
+
