@@ -4,12 +4,13 @@ import mysql.connector
 from mysql.connector import Error
 import pandas as pd
 from fastapi.responses import JSONResponse
+import streamlit as st
 
 app = FastAPI()
 
 # Modelo para los datos (opcional, dependiendo de tus necesidades)
 class Data(BaseModel):
-    ID_publicacion: str
+    ID_publicacion: int
     Fecha: str
     visits: int
     health: float
@@ -19,12 +20,13 @@ class Data(BaseModel):
 # Conectar a la base de datos
 def connect_to_mysql():
     try:
+        # Accediendo a los secretos de Streamlit
         conn = mysql.connector.connect(
-            host="192.168.1.38",  # Cambia esto por la dirección de tu base de datos
-            port=3306
-            database="lorenzo_automotores",
-            user="cliente_lorenzo",
-            password="Lorenzo$$$424"
+            host=st.secrets["mysql"]["host"],
+            port=st.secrets["mysql"]["port"],
+            database=st.secrets["mysql"]["database"],
+            user=st.secrets["mysql"]["user"],
+            password=st.secrets["mysql"]["password"]
         )
         return conn
     except Error as e:
@@ -42,4 +44,5 @@ def obtener_datos():
         return JSONResponse(content=df.to_dict(orient="records"))  # Convertir dataframe a JSON
     else:
         return {"error": "No se pudo conectar a la base de datos"}
+
 
