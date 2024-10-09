@@ -1,75 +1,38 @@
 import streamlit as st
 import pandas as pd
-import mysql.connector
-from mysql.connector import Error
+import requests
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 
-# Función para conectar a MySQL
-def connect_to_mysql(server, database, username, password):
-    try:
-        conn = mysql.connector.connect(
-            host=server,
-            database=database,
-            user=username,
-            password=password
-        )
-        if conn.is_connected():
-            st.success("Conexión exitosa a la base de datos MySQL")
-        return conn
-    except Error as e:
-        st.error(f"Error al conectar al servidor MySQL: {e}")
-        return None
-
-# Función para cargar datos desde MySQL
-def load_data_from_mysql(query, server, database, username, password):
-    conn = connect_to_mysql(server, database, username, password)
-    if conn:
-        try:
-            df = pd.read_sql(query, conn)
-            conn.close()  # Cerrar la conexión después de la consulta
-            return df
-        except Exception as e:
-            st.error(f"Error al ejecutar la consulta SQL: {e}")
-            return None
-    else:
-        return None
-
-# Inicializa el estado para almacenar el DataFrame concatenado
-if 'df_concatenado' not in st.session_state:
-    st.session_state['df_concatenado'] = None
+# URL del API de FastAPI (cambiar si es necesario)
+api_url = "http://192.168.1.38:3306/datos"  # Cambia la URL según la dirección de tu FastAPI
 
 # Título en la barra lateral para la navegación
 st.sidebar.title("Configuración de Conexión")
-
-# Configuración de conexión
-server = st.sidebar.text_input("Servidor MySQL", "192.168.1.38")  # Cambia la IP si es necesario
-database = st.sidebar.text_input("Base de Datos", "")
-username = st.sidebar.text_input("Usuario", "cliente_lorenzo")  # Usuario
-password = st.sidebar.text_input("Contraseña", "", type="password")  # Contraseña
 
 # Selección de la página
 pagina = st.sidebar.selectbox("Seleccione una página", ["Carga de Datos", "Visualización", "Gráfico"])
 
 # Página 1: Carga de datos
 if pagina == "Carga de Datos":
-    st.title("Carga de Datos desde MySQL")
-
-    # Consulta SQL para cargar los datos
-    query = st.text_area("Ingresa la consulta SQL:", "SELECT `ID publicación`, `Fecha`, `visits`, `health`, `Origen`, `Título` FROM visitas_salud") 
+    st.title("Carga de Datos desde la API")
 
     if st.button("Cargar Datos"):
-        df_concatenado = load_data_from_mysql(query, server, database, username, password)
-        if df_concatenado is not None:
+        # Hacer la petición a la API de FastAPI
+        response = requests.get(api_url)
+        if response.status_code == 200:
+            df_concatenado = pd.DataFrame(response.json())
             st.session_state['df_concatenado'] = df_concatenado
-            st.write("Datos cargados desde MySQL:")
+            st.write("Datos cargados desde la API:")
             st.dataframe(df_concatenado)
+        else:
+            st.error("Error al cargar datos desde la API")
 
 # Página 2: Visualización de datos
 elif pagina == "Visualización":
     st.title("Visualización de Información")
 
-    if st.session_state['df_concatenado'] is not None:
+    if 'df_concatenado' in st.session_state:
         df_concatenado = st.session_state['df_concatenado']
         st.write("Datos concatenados:")
         st.write("Columnas disponibles:", df_concatenado.columns.tolist())
@@ -79,8 +42,8 @@ elif pagina == "Visualización":
             df_concatenado['Fecha'] = pd.to_datetime(df_concatenado['Fecha'], errors='coerce')
 
         # Crear filtros para las columnas deseadas
-        fecha_inicio = st.date_input("Fecha de inicio")
-        fecha_fin = st.date_input("Fecha de fin")
+        fecha_inicio = st.date_input("Fecha de inicio", pd.to_datetime(df_concatenado['Fecha'].min()).date())
+        fecha_fin = st.date_input("Fecha de fin", pd.to_datetime(df_concatenado['Fecha'].max()).date())
 
         # Filtro por 'Título'
         if 'Título' in df_concatenado.columns:
@@ -140,15 +103,15 @@ elif pagina == "Visualización":
 elif pagina == "Gráfico":
     st.title("Gráfico de Visitas por Fecha")
 
-    if st.session_state['df_concatenado'] is not None:
+    if 'df_concatenado' in st.session_state:
         df_concatenado = st.session_state['df_concatenado']
 
         if 'Fecha' in df_concatenado.columns:
             df_concatenado['Fecha'] = pd.to_datetime(df_concatenado['Fecha'], errors='coerce')
 
             # Crear filtros
-            fecha_inicio = st.date_input("Fecha de inicio")
-            fecha_fin = st.date_input("Fecha de fin")
+            fecha_inicio = st.date_input("Fecha de inicio", pd.to_datetime(df_concatenado['Fecha'].min()).date())
+            fecha_fin = st.date_input("Fecha de fin", pd.to_datetime(df_concatenado['Fecha'].max()).date())
 
             # Filtro por 'Origen'
             if 'Origen' in df_concatenado.columns:
