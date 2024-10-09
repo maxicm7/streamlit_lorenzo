@@ -10,7 +10,7 @@ app = FastAPI()
 
 # Modelo para los datos (opcional, dependiendo de tus necesidades)
 class Data(BaseModel):
-    ID_publicacion: int
+    ID_publicacion: str
     Fecha: str
     visits: int
     health: float
