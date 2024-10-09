@@ -40,10 +40,10 @@ if 'df_concatenado' not in st.session_state:
 st.sidebar.title("Configuración de Conexión")
 
 # Configuración de conexión
-server = st.sidebar.text_input("Servidor MySQL", "")
+server = st.sidebar.text_input("Servidor MySQL", "192.168.1.38")  # Agrega la IP aquí
 database = st.sidebar.text_input("Base de Datos", "")
-username = st.sidebar.text_input("Usuario", "")
-password = st.sidebar.text_input("Contraseña", "", type="password")
+username = st.sidebar.text_input("Usuario", "cliente_lorenzo")  # Agrega el usuario aquí
+password = st.sidebar.text_input("Contraseña", "", type="password")  # Agrega la contraseña aquí
 
 # Selección de la página
 pagina = st.sidebar.selectbox("Seleccione una página", ["Carga de Datos", "Visualización", "Gráfico"])
