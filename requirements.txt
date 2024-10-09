@@ -3,6 +3,5 @@ fastapi
 uvicorn
 mysql-connector-python
 pandas
-streamlit
 matplotlib
 
