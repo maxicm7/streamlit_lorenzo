@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import mysql.connector
+from mysql.connector import Error
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 
@@ -13,8 +14,10 @@ def connect_to_mysql(server, database, username, password):
             user=username,
             password=password
         )
+        if conn.is_connected():
+            st.success("Conexión exitosa a la base de datos MySQL")
         return conn
-    except Exception as e:
+    except Error as e:
         st.error(f"Error al conectar al servidor MySQL: {e}")
         return None
 
@@ -40,10 +43,10 @@ if 'df_concatenado' not in st.session_state:
 st.sidebar.title("Configuración de Conexión")
 
 # Configuración de conexión
-server = st.sidebar.text_input("Servidor MySQL", "192.168.1.38")  # Agrega la IP aquí
+server = st.sidebar.text_input("Servidor MySQL", "192.168.1.38")  # Cambia la IP si es necesario
 database = st.sidebar.text_input("Base de Datos", "")
-username = st.sidebar.text_input("Usuario", "cliente_lorenzo")  # Agrega el usuario aquí
-password = st.sidebar.text_input("Contraseña", "", type="password")  # Agrega la contraseña aquí
+username = st.sidebar.text_input("Usuario", "cliente_lorenzo")  # Usuario
+password = st.sidebar.text_input("Contraseña", "", type="password")  # Contraseña
 
 # Selección de la página
 pagina = st.sidebar.selectbox("Seleccione una página", ["Carga de Datos", "Visualización", "Gráfico"])
