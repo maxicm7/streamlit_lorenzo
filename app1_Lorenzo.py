@@ -120,7 +120,7 @@ def mostrar_exito(mensaje):
 
 # Función principal de Streamlit
 def main():
-    st.title("App de Análisis de Datos de Salud")
+    st.title("App de Visitas y estado de Salud de las publicaciones en Mercado Libre")
 
     # Barra lateral para selección de página
     pagina = st.sidebar.selectbox("Seleccione una página", ["Carga de Datos", "Visualización", "Gráfico"])
