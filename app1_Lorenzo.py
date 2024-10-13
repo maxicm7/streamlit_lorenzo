@@ -1,162 +1,157 @@
 import streamlit as st
+import mysql.connector
+from mysql.connector import Error
 import pandas as pd
-import requests
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+from fastapi import FastAPI
+from fastapi.responses import JSONResponse
+from datetime import timedelta
 
-# URL del API de FastAPI (cambiar si es necesario)
-api_url = "http://192.168.1.38:3306/datos"  # Cambia la URL según la dirección de tu FastAPI
+# Función para conectar a MySQL
+def connect_to_mysql():
+    try:
+        conn = mysql.connector.connect(
+            host=st.secrets["mysql"]["host"],
+            port=st.secrets["mysql"]["port"],
+            database=st.secrets["mysql"]["database"],
+            user=st.secrets["mysql"]["user"],
+            password=st.secrets["mysql"]["password"]
+        )
+        return conn
+    except Error as e:
+        print(f"Error al conectar: {e}")
+        return None
 
-# Título en la barra lateral para la navegación
-st.sidebar.title("Configuración de Conexión")
+# App FastAPI
+app = FastAPI()
 
-# Selección de la página
-pagina = st.sidebar.selectbox("Seleccione una página", ["Carga de Datos", "Visualización", "Gráfico"])
-
-# Página 1: Carga de datos
-if pagina == "Carga de Datos":
-    st.title("Carga de Datos desde la API")
-
-    if st.button("Cargar Datos"):
-        # Hacer la petición a la API de FastAPI
-        response = requests.get(api_url)
-        if response.status_code == 200:
-            df_concatenado = pd.DataFrame(response.json())
-            st.session_state['df_concatenado'] = df_concatenado
-            st.write("Datos cargados desde la API:")
-            st.dataframe(df_concatenado)
-        else:
-            st.error("Error al cargar datos desde la API")
-
-# Página 2: Visualización de datos
-elif pagina == "Visualización":
-    st.title("Visualización de Información")
-
-    if 'df_concatenado' in st.session_state:
-        df_concatenado = st.session_state['df_concatenado']
-        st.write("Datos concatenados:")
-        st.write("Columnas disponibles:", df_concatenado.columns.tolist())
-
-        # Asegurarse de que 'Fecha' sea una columna datetime
-        if 'Fecha' in df_concatenado.columns:
-            df_concatenado['Fecha'] = pd.to_datetime(df_concatenado['Fecha'], errors='coerce')
-
-        # Crear filtros para las columnas deseadas
-        fecha_inicio = st.date_input("Fecha de inicio", pd.to_datetime(df_concatenado['Fecha'].min()).date())
-        fecha_fin = st.date_input("Fecha de fin", pd.to_datetime(df_concatenado['Fecha'].max()).date())
-
-        # Filtro por 'Título'
-        if 'Título' in df_concatenado.columns:
-            titulos_unicos = df_concatenado['Título'].unique()
-            titulo = st.selectbox("Título", titulos_unicos)
-        else:
-            st.warning("La columna 'Título' no está disponible en los datos.")
-
-        # Filtro por 'Origen'
-        if 'Origen' in df_concatenado.columns:
-            origenes_unicos = df_concatenado['Origen'].unique()
-            origen = st.selectbox("Origen", origenes_unicos)
-        else:
-            st.warning("La columna 'Origen' no está disponible en los datos.")
-
-        # Filtros por rangos para 'health' y 'visits'
-        health_min, health_max = st.slider("Rango de Health", 
-                                             min_value=float(df_concatenado['health'].min()), 
-                                             max_value=float(df_concatenado['health'].max()), 
-                                             value=(float(df_concatenado['health'].min()), float(df_concatenado['health'].max())))
-
-        visits_min, visits_max = st.slider("Rango de Visits", 
-                                             min_value=int(df_concatenado['visits'].min()), 
-                                             max_value=int(df_concatenado['visits'].max()), 
-                                             value=(int(df_concatenado['visits'].min()), int(df_concatenado['visits'].max())))
-
-        # Aplicar filtros
-        if 'Fecha' in df_concatenado.columns:
-            if fecha_inicio:
-                df_concatenado = df_concatenado[df_concatenado['Fecha'] >= pd.to_datetime(fecha_inicio)]
-            if fecha_fin:
-                df_concatenado = df_concatenado[df_concatenado['Fecha'] <= pd.to_datetime(fecha_fin)]
+@app.get("/datos")
+async def obtener_datos():
+    conn = connect_to_mysql()
+    if conn:
+        query = "SELECT `ID publicación`, `Fecha`, `visits`, `health`, `Origen`, `Título` FROM visitas_salud"
+        df = pd.read_sql(query, conn)
+        conn.close()
         
-        if 'Título' in df_concatenado.columns and titulo:
-            df_concatenado = df_concatenado[df_concatenado['Título'] == titulo]
+        # Configurar TTL para el caché
+        ttl = timedelta(minutes=10)
+        return JSONResponse(content=df.to_dict(orient="records"), headers={"Cache-Control": f"max-age={ttl.total_seconds()}"})
+    else:
+        return JSONResponse(content={"error": "No se pudo conectar a la base de datos"}, status_code=500)
+
+# Función para generar el gráfico
+def generar_grafico(df):
+    fig, ax = plt.subplots(figsize=(12, 6))
+    
+    if 'Fecha' in df.columns:
+        df['Fecha'] = pd.to_datetime(df['Fecha'])
+        visitas_por_fecha = df.groupby('Fecha')['visits'].sum()
         
-        if 'Origen' in df_concatenado.columns and origen:
-            df_concatenado = df_concatenado[df_concatenado['Origen'] == origen]
+        origen = st.selectbox("Origen", df['Origen'].unique()) if 'Origen' in df.columns else None
+        
+        if origen:
+            df_origen = df[df['Origen'] == origen]
+            visitas_por_fecha_origen = df_origen.groupby('Fecha')['visits'].sum()
+            
+            ax.plot(visitas_por_fecha.index, visitas_por_fecha.values, label=f'Todas las fuentes')
+            ax.plot(visitas_por_fecha_origen.index, visitas_por_fecha_origen.values, label=f'{origen}')
+            
+            ax.legend()
+        
+        ax.set_xlabel("Fecha")
+        ax.set_ylabel("Visitas")
+        ax.set_title("Visitas por Fecha")
+        
+        date_format = mdates.DateFormatter('%Y-%m-%d')
+        ax.xaxis.set_major_formatter(date_format)
+        ax.xaxis.set_major_locator(mdates.DayLocator())
+        
+        fig.autofmt_xdate()
+        
+        return fig
+    
+    return None
 
-        # Filtrar por rangos de health y visits
-        df_concatenado = df_concatenado[(df_concatenado['health'] >= health_min) & (df_concatenado['health'] <= health_max)]
-        df_concatenado = df_concatenado[(df_concatenado['visits'] >= visits_min) & (df_concatenado['visits'] <= visits_max)]
+# Función para generar el DataFrame filtrado
+def generar_dataframe_filtrado(df, fecha_inicio, fecha_fin, titulo, origen, health_min, health_max, visits_min, visits_max):
+    if 'Fecha' in df.columns:
+        df['Fecha'] = pd.to_datetime(df['Fecha'])
+        df = df[(df['Fecha'] >= fecha_inicio) & (df['Fecha'] <= fecha_fin)]
+    
+    if 'Título' in df.columns and titulo:
+        df = df[df['Título'] == titulo]
+    
+    if 'Origen' in df.columns and origen:
+        df = df[df['Origen'] == origen]
+    
+    df = df[(df['health'] >= health_min) & (df['health'] <= health_max)]
+    df = df[(df['visits'] >= visits_min) & (df['visits'] <= visits_max)]
+    
+    return df
 
-        # Agrupa por 'ID publicación' y 'Fecha' después de filtrar
-        df_filtrado = df_concatenado.groupby(['ID publicación', 'Fecha']).agg({
-            'visits': 'sum',
-            'health': 'mean',
-            'Origen': 'first',
-            'Título': 'first'
-        }).reset_index()
-
-        st.dataframe(df_filtrado)
+# Función para mostrar el DataFrame filtrado
+def mostrar_dataframe_filtrado(df):
+    if not df.empty:
+        st.subheader("DataFrame filtrado")
+        st.dataframe(df)
     else:
-        st.warning("No se ha cargado ningún archivo. Ve a la sección 'Carga de Datos' para hacerlo.")
+        st.info("No hay datos que coincidan con los criterios de filtro")
 
-# Página 3: Gráfico
-elif pagina == "Gráfico":
-    st.title("Gráfico de Visitas por Fecha")
-
-    if 'df_concatenado' in st.session_state:
-        df_concatenado = st.session_state['df_concatenado']
-
-        if 'Fecha' in df_concatenado.columns:
-            df_concatenado['Fecha'] = pd.to_datetime(df_concatenado['Fecha'], errors='coerce')
-
-            # Crear filtros
-            fecha_inicio = st.date_input("Fecha de inicio", pd.to_datetime(df_concatenado['Fecha'].min()).date())
-            fecha_fin = st.date_input("Fecha de fin", pd.to_datetime(df_concatenado['Fecha'].max()).date())
-
-            # Filtro por 'Origen'
-            if 'Origen' in df_concatenado.columns:
-                origenes_unicos = df_concatenado['Origen'].unique()
-                origen = st.selectbox("Origen", origenes_unicos)
-            else:
-                st.warning("La columna 'Origen' no está disponible en los datos.")
-
-            # Aplicar filtros
-            if fecha_inicio:
-                df_concatenado = df_concatenado[df_concatenado['Fecha'] >= pd.to_datetime(fecha_inicio)]
-            if fecha_fin:
-                df_concatenado = df_concatenado[df_concatenado['Fecha'] <= pd.to_datetime(fecha_fin)]
-            if 'Origen' in df_concatenado.columns and origen:
-                df_concatenado = df_concatenado[df_concatenado['Origen'] == origen]
-
-            # Agrupa por 'Fecha' y suma las visitas
-            visitas_por_fecha = df_concatenado.groupby('Fecha')['visits'].sum()
-
-            # Opción de acumulado
-            acumulado = st.checkbox("Acumulado")
-
-            # Crea el gráfico con matplotlib
-            fig, ax = plt.subplots()
-
-            if acumulado:
-                ax.plot(visitas_por_fecha.index, visitas_por_fecha.cumsum())
-                ax.set_ylabel("Visitas Acumuladas")
-            else:
-                ax.plot(visitas_por_fecha.index, visitas_por_fecha.values)
-                ax.set_ylabel("Visitas")
-
-            ax.set_xlabel("Fecha")
-            ax.set_title("Visitas por Fecha")
-
-            # Formato de fecha mejorado
-            date_format = mdates.DateFormatter('%Y-%m-%d')
-            ax.xaxis.set_major_formatter(date_format)
-            ax.xaxis.set_major_locator(mdates.DayLocator())
-
-            # Ajustar el gráfico para mejor legibilidad
-            fig.autofmt_xdate()  # Rotar etiquetas de fecha para evitar solapamientos
-
-            # Mostrar gráfico en Streamlit
-            st.pyplot(fig)
-
+# Función para mostrar el gráfico
+def mostrar_grafico(fig):
+    if fig:
+        st.subheader("Grafico de Visitas por Fecha")
+        st.pyplot(fig)
     else:
-        st.warning("No se ha cargado ningún archivo. Ve a la sección 'Carga de Datos' para hacerlo.")
+        st.info("No hay suficiente información para generar el gráfico")
+
+# Función para mostrar el mensaje de error
+def mostrar_error(error):
+    st.error(error)
+
+# Función para mostrar el mensaje de advertencia
+def mostrar_advertencia(mensaje):
+    st.warning(mensaje)
+
+# Función para mostrar el mensaje de éxito
+def mostrar_exito(mensaje):
+    st.success(mensaje)
+
+# Función principal de Streamlit
+def main():
+    st.title("App de Análisis de Datos de Salud")
+
+    # Barra lateral para selección de página
+    pagina = st.sidebar.selectbox("Seleccione una página", ["Carga de Datos", "Visualización", "Gráfico"])
+
+    if pagina == "Carga de Datos":
+        st.title("Carga de Datos desde la API")
+        
+        if st.button("Cargar Datos"):
+            conn = connect_to_mysql()
+            if conn:
+                query = "SELECT `ID publicación`, `Fecha`, `visits`, `health`, `Origen`, `Título` FROM visitas_salud"
+                df = pd.read_sql(query, conn)
+                conn.close()
+                
+                if not df.empty:
+                    st.session_state['df_concatenado'] = df
+                    st.write("Datos cargados desde la API:")
+                    st.dataframe(df)
+                else:
+                    mostrar_error("No se obtuvieron datos de la API.")
+            else:
+                mostrar_error("Error al conectar a la base de datos.")
+    elif pagina == "Visualización":
+        if 'df_concatenado' in st.session_state:
+            df_concatenado = st.session_state['df_concatenado']
+            mostrar_dataframe_filtrado(generar_dataframe_filtrado(df_concatenado, *st.date_input_values(), *st.selectbox_values(), *st.slider_values()))
+        else:
+            mostrar_advertencia("No se ha cargado ningún archivo. Ve a la sección 'Carga de Datos' para hacerlo.")
+    elif pagina == "Gráfico":
+        fig = generar_grafico(st.session_state['df_concatenado']) if 'df_concatenado' in st.session_state else None
+        mostrar_grafico(fig)
+
+if __name__ == "__main__":
+    main()
